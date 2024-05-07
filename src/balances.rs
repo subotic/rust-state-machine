@@ -1,15 +1,21 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Debug};
+
+use num::{CheckedAdd, CheckedSub, Zero};
+
+pub trait Config: crate::system::Config {
+    type Balance: Zero + CheckedSub + CheckedAdd + Copy + Debug;
+}
 
 /// This is the Balances Module.
 /// It is a simple module which keeps track of how much balance each account has in this state
 /// machine.
 #[derive(Debug)]
-pub struct Pallet {
+pub struct Pallet<T: Config> {
     // A simple storage mapping from accounts (`String`) to their balances (`u128`).
-    balances: BTreeMap<String, u128>,
+    balances: BTreeMap<T::AccountID, T::Balance>,
 }
 
-impl Pallet {
+impl<T: Config> Pallet<T> {
     /// Create a new instance of the balances module.
     pub fn new() -> Self {
         Self {
@@ -17,16 +23,16 @@ impl Pallet {
         }
     }
     /// Set the balance of an account `who` to some `amount`.
-    pub fn set_balance(&mut self, who: &String, amount: u128) {
+    pub fn set_balance(&mut self, who: &T::AccountID, amount: T::Balance) {
         /* Insert `amount` into the BTreeMap under `who`. */
         self.balances.insert(who.clone(), amount);
     }
 
     /// Get the balance of an account `who`.
     /// If the account has no stored balance, we return zero.
-    pub fn balance(&self, who: &String) -> u128 {
+    pub fn balance(&self, who: &T::AccountID) -> T::Balance {
         /* Return the balance of `who`, returning zero if `None`. */
-        *self.balances.get(who).unwrap_or(&0)
+        *self.balances.get(who).unwrap_or(&T::Balance::zero())
     }
 
     /// Transfer `amount` from one account to another.
@@ -34,24 +40,26 @@ impl Pallet {
     /// and that no mathematical overflows occur.
     pub fn transfer(
         &mut self,
-        caller: String,
-        to: String,
-        amount: u128,
+        caller: T::AccountID,
+        to: T::AccountID,
+        amount: T::Balance,
     ) -> Result<(), &'static str> {
         // - Get the balance of account `caller`.
-        let from_balance = self.balance(&caller);
+        let caller_balance = self.balance(&caller);
 
         // - Get the balance of account `to`.
         let to_balance = self.balance(&to);
 
         // - Use safe math to calculate a `new_caller_balance`.
-        let new_from_balance = from_balance.checked_sub(amount).ok_or("Not enough funds")?;
+        let new_caller_balance = caller_balance
+            .checked_sub(&amount)
+            .ok_or("Not enough funds")?;
 
         // - Use safe math to calculate a `new_to_balance`.
-        let new_to_balance = to_balance.checked_add(amount).ok_or("To much funds")?;
+        let new_to_balance = to_balance.checked_add(&amount).ok_or("Overflow")?;
 
         // - Insert the new balance of `caller`.
-        self.set_balance(&caller, new_from_balance);
+        self.set_balance(&caller, new_caller_balance);
 
         // - Insert the new balance of `to`.
         self.set_balance(&to, new_to_balance);
@@ -62,12 +70,23 @@ impl Pallet {
 
 #[cfg(test)]
 mod tests {
+    use super::Config;
     use super::Pallet;
+
+    struct TestConfig;
+    impl Config for TestConfig {
+        type Balance = u128;
+    }
+    impl crate::system::Config for TestConfig {
+        type AccountID = String;
+        type BlockNumber = u32;
+        type Nonce = u32;
+    }
 
     #[test]
     fn init_balances() {
         /* TODO: Create a mutable variable `balances`, which is a new instance of `Pallet`. */
-        let mut balances = Pallet::new();
+        let mut balances = Pallet::<TestConfig>::new();
 
         /* TODO: Assert that the balance of `alice` starts at zero. */
         assert_eq!(balances.balance(&"alice".to_string()), 0);
@@ -89,7 +108,7 @@ mod tests {
             - That `alice` can successfully transfer funds to `bob`.
             - That the balance of `alice` and `bob` is correctly updated.
         */
-        let mut balances = Pallet::new();
+        let mut balances = Pallet::<TestConfig>::new();
         assert_eq!(
             balances
                 .transfer("alice".to_string(), "bob".to_string(), 100)
