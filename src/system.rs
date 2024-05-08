@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt::Debug, ops::AddAssign};
 use num::{One, Zero};
 
 pub trait Config {
-    type AccountID: Ord + Clone;
+    type AccountId: Ord + Clone;
     type BlockNumber: Zero + One + AddAssign + Copy + Debug;
     type Nonce: Zero + One + Copy + Debug;
 }
@@ -17,7 +17,7 @@ pub struct Pallet<T: Config> {
     /// The current block number.
     block_number: T::BlockNumber,
     /// A map from an account to their nonce.
-    nonce: BTreeMap<T::AccountID, T::Nonce>,
+    nonce: BTreeMap<T::AccountId, T::Nonce>,
 }
 
 impl<T: Config> Pallet<T> {
@@ -44,7 +44,7 @@ impl<T: Config> Pallet<T> {
 
     // Increment the nonce of an account. This helps us keep track of how many transactions each
     // account has made.
-    pub fn inc_nonce(&mut self, who: &T::AccountID) {
+    pub fn inc_nonce(&mut self, who: &T::AccountId) {
         /* TODO: Get the current nonce of `who`, and increment it by one. */
         let current_nonce = self.nonce.get(who);
         match current_nonce {
@@ -63,7 +63,7 @@ mod test {
 
     struct TestConfig;
     impl Config for TestConfig {
-        type AccountID = String;
+        type AccountId = String;
         type BlockNumber = u32;
         type Nonce = u32;
     }
